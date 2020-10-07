@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
+use bytes::Bytes;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthResponse {
@@ -86,12 +87,12 @@ impl SeafileAPI {
     }
 
     pub fn get_libraries(&self) -> Result<Vec<Library>, Box<dyn std::error::Error>> {
-		{
-			let libraries =  self.libraries.lock().unwrap();
-			if let Some(l) = &*libraries {
-				return Ok(l.to_vec());
-			}
-		}
+        {
+            let libraries = self.libraries.lock().unwrap();
+            if let Some(l) = &*libraries {
+                return Ok(l.to_vec());
+            }
+        }
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -104,9 +105,9 @@ impl SeafileAPI {
         debug!("response headers: {:?}", res.headers());
         let body: Vec<Library> = res.json()?;
         {
-			let mut libraries = self.libraries.lock().unwrap();
-			*libraries = Some(body.clone());
-		}
+            let mut libraries = self.libraries.lock().unwrap();
+            *libraries = Some(body.clone());
+        }
         Ok(body)
     }
 
@@ -133,6 +134,33 @@ impl SeafileAPI {
         let body: Vec<LibraryEntry> = res.json()?;
         Ok(body)
     }
+    
+    pub fn get_download_link(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+        debug!("self: {:?}", &self);
+        let authorization = self.login()?;
+        debug!("self: {:?}", &self);
+        let url = format!("{}/api2/repos/{}/file/", self.server, id);
+
+        debug!("url: {}, {:?}, {:?}", url, ("p", path), ("reuse", 1));
+
+        let res = self
+            .client
+            .get(&url)
+            //.query(&[("t","f"),("p","/")])
+            .query(&[("p", path)])
+            .query(&[("reuse", 1)])
+            .header("Authorization", &authorization)
+            .send()?;
+
+        let body: String = res.json()?;
+        Ok(body)
+	}
+	
+	pub fn download(&self, uri: &str) -> Result<Bytes, Box<dyn std::error::Error>> {
+		let res = self.client.get(uri).send()?;
+		let body = res.bytes()?;
+		Ok(body)
+	}
 }
 
 /*

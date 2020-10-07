@@ -13,6 +13,8 @@ fuse_mt = "0.5.1"
 libc = "0.2.54"
 # higher level HTTP client library
 reqwest = { version = "0.10", features = ["blocking","json"] }
+# Types and traits for working with bytes
+bytes = "0.5.6"
 # An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications.
 tokio = { version = "0.2", features = ["full"] }
 # An implementation of futures and streams featuring zero allocations, composability, ...

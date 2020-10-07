@@ -1,12 +1,12 @@
 use fuse_mt::{
-    CallbackResult, DirectoryEntry, FileAttr, FileType, FilesystemMT, RequestInfo, 
-    ResultEmpty, ResultEntry, ResultOpen, ResultReaddir, ResultSlice, ResultStatfs,
-    Statfs,
+    CallbackResult, DirectoryEntry, FileAttr, FileType, FilesystemMT, RequestInfo, ResultEmpty,
+    ResultEntry, ResultOpen, ResultReaddir, ResultSlice, ResultStatfs, Statfs,
 };
 use libc::{ENOENT, EPERM};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use time::Timespec;
+use bytes::Bytes;
 
 mod seafileapi;
 
@@ -213,9 +213,9 @@ impl FilesystemMT for SeafileFS {
                 {
                     Some(e) => e,
                     _ => {
-						debug!("ERROR: no library {:?}", library_name);
-						return Err(ENOENT);
-					}
+                        debug!("ERROR: no library {:?}", library_name);
+                        return Err(ENOENT);
+                    }
                 };
                 let entries = match self
                     .api
@@ -243,9 +243,74 @@ impl FilesystemMT for SeafileFS {
 
         Ok(entries)
     }
-    
-    fn read(&self, _req: RequestInfo, path: &Path, _fh: u64, offset: u64, size: u32, callback: impl FnOnce(ResultSlice<'_>) -> CallbackResult) -> CallbackResult {
-		debug!("read {:?} {} {}", path, offset, size);
-		callback(Err(libc::ENOSYS))
-	}
+
+    fn read(
+        &self,
+        _req: RequestInfo,
+        path: &Path,
+        _fh: u64,
+        offset: u64,
+        size: u32,
+        callback: impl FnOnce(ResultSlice<'_>) -> CallbackResult,
+    ) -> CallbackResult {
+        debug!("read {:?} {} {}", path, offset, size);
+        let mut components = path.components().collect::<Vec<_>>();
+        debug!("read: {:?}", components);
+
+        let mut libraries = match self.api.get_libraries() {
+            Ok(l) => l,
+            Err(e) => {
+                debug!("ERROR: A: read({:?}) {}", path, e);
+                return callback(Err(ENOENT));
+            }
+        };
+        libraries.sort_by(|a, b| a.name.cmp(&b.name));
+        libraries.dedup_by(|a, b| a.name.eq(&b.name));
+        debug!("Seafile libraries: {:#?}", libraries);
+        let library_name = components.remove(1);
+        debug!(
+            "split: ({:?} | {:?})",
+            library_name, components
+        );
+        let relative_path = components.into_iter().collect::<PathBuf>();
+        debug!("join: {:?}", relative_path);
+        let entry = match libraries
+            .into_iter()
+            .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
+            .nth(0)
+        {
+            Some(e) => e,
+            _ => seafileapi::Library::default(),
+        };
+        let download_uri = match self.api.get_download_link(&entry.id, &relative_path) {
+            Ok(e) => e,
+            Err(e) => {
+                debug!("ERROR: B: read({:?}) {}", path, e);
+                return callback(Err(ENOENT));
+            }
+        };
+        debug!(
+            "TODO: Find {:?} in entries of {}: {:?}",
+            path, entry.name, download_uri
+        );
+        let mut body = match self.api.download(&download_uri) {
+			Ok(e) => e,
+			Err(e) => {
+				debug!("ERROR: C: read({:?}) {}", path, e);
+				return callback(Err(ENOENT));
+			}
+		};
+		if body.len() > offset as usize {
+			body = body.split_off(offset as usize);
+		} else {
+			debug!("body len: {} emptying", body.len());
+			body = Bytes::new();
+		}
+		if body.len() > size as usize {
+			body = body.split_to(size as usize);
+		}
+		debug!("body: {:?}", body);
+        
+        callback(Ok(&body))
+    }
 }
