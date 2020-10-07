@@ -1,6 +1,7 @@
 use fuse_mt::{
-    DirectoryEntry, FileAttr, FileType, FilesystemMT, RequestInfo, ResultEmpty, ResultEntry,
-    ResultOpen, ResultReaddir, ResultStatfs, Statfs,
+    CallbackResult, DirectoryEntry, FileAttr, FileType, FilesystemMT, RequestInfo, 
+    ResultEmpty, ResultEntry, ResultOpen, ResultReaddir, ResultSlice, ResultStatfs,
+    Statfs,
 };
 use libc::{ENOENT, EPERM};
 use std::ffi::OsString;
@@ -242,4 +243,9 @@ impl FilesystemMT for SeafileFS {
 
         Ok(entries)
     }
+    
+    fn read(&self, _req: RequestInfo, path: &Path, _fh: u64, offset: u64, size: u32, callback: impl FnOnce(ResultSlice<'_>) -> CallbackResult) -> CallbackResult {
+		debug!("read {:?} {} {}", path, offset, size);
+		callback(Err(libc::ENOSYS))
+	}
 }

@@ -8,7 +8,7 @@ struct AuthResponse {
     token: String,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Library {
     permission: String,
     encrypted: bool,
@@ -42,6 +42,7 @@ pub struct LibraryEntry {
 pub struct SeafileAPI {
     client: reqwest::blocking::Client,
     authorization: Mutex<Option<String>>,
+    libraries: Mutex<Option<Vec<Library>>>,
     server: String,
     username: String,
     password: String,
@@ -51,6 +52,7 @@ impl SeafileAPI {
         Self {
             client: reqwest::blocking::Client::new(),
             authorization: Mutex::new(None),
+            libraries: Mutex::new(None),
             server: server.to_string(),
             username: username.to_string(),
             password: password.to_string(),
@@ -84,6 +86,12 @@ impl SeafileAPI {
     }
 
     pub fn get_libraries(&self) -> Result<Vec<Library>, Box<dyn std::error::Error>> {
+		{
+			let libraries =  self.libraries.lock().unwrap();
+			if let Some(l) = &*libraries {
+				return Ok(l.to_vec());
+			}
+		}
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -93,7 +101,12 @@ impl SeafileAPI {
             .get(&url)
             .header("Authorization", &authorization)
             .send()?;
+        debug!("response headers: {:?}", res.headers());
         let body: Vec<Library> = res.json()?;
+        {
+			let mut libraries = self.libraries.lock().unwrap();
+			*libraries = Some(body.clone());
+		}
         Ok(body)
     }
 

@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 # A higher-level FUSE filesystem library with multi-threading and inode->path translation.
-fuse_mt = "0.5.0"
+fuse_mt = "0.5.1"
 # Raw FFI bindings to platform libraries like libc.
 libc = "0.2.54"
 # higher level HTTP client library
