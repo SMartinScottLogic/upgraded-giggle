@@ -17,9 +17,9 @@ pub struct SeafileFS {
 }
 
 impl SeafileFS {
-    pub fn new(server: &str, username: &str, password: &str) -> SeafileFS {
+    pub fn new(server: &OsString, username: &OsString, password: &OsString) -> SeafileFS {
         SeafileFS {
-            api: seafileapi::SeafileAPI::new(server, username, password),
+            api: seafileapi::SeafileAPI::new(&server.to_string_lossy(), &username.to_string_lossy(), &password.to_string_lossy()),
         }
     }
 
