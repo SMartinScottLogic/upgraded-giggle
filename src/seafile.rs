@@ -2,8 +2,8 @@ use fuse_mt::{
     CallbackResult, DirectoryEntry, FileAttr, FileType, FilesystemMT, RequestInfo, ResultEmpty,
     ResultEntry, ResultOpen, ResultReaddir, ResultSlice, ResultStatfs, Statfs,
 };
-use libc::{ENOENT, EPERM};
-use std::ffi::OsString;
+use libc::{ENOENT, EPERM, ENOSYS};
+use std::ffi::{OsString, OsStr};
 use std::path::{Path, PathBuf};
 use time::Timespec;
 use bytes::Bytes;
@@ -78,7 +78,7 @@ impl FilesystemMT for SeafileFS {
                         return Err(ENOENT);
                     }
                 };
-                trace!("Seafile libraries: {:#?}", libraries);
+                trace!("Seafile libraries: {:?}", libraries);
                 libraries.sort_by(|a, b| a.name.cmp(&b.name));
                 libraries.dedup_by(|a, b| a.name.eq(&b.name));
                 let entry = match libraries
@@ -87,7 +87,10 @@ impl FilesystemMT for SeafileFS {
                     .nth(0)
                 {
                     Some(e) => e,
-                    _ => seafileapi::Library::default(),
+                    _ => {
+                        debug!("ERROR: 0: readdir({:?})", path);
+                        return Err(ENOENT);
+                    },
                 };
 
                 Ok((
@@ -109,7 +112,7 @@ impl FilesystemMT for SeafileFS {
                 };
                 libraries.sort_by(|a, b| a.name.cmp(&b.name));
                 libraries.dedup_by(|a, b| a.name.eq(&b.name));
-                debug!("Seafile libraries: {:#?}", libraries);
+                debug!("Seafile libraries: {:?}", libraries);
                 let library_name = components.remove(1);
                 let file_name = components.pop().unwrap();
                 debug!(
@@ -143,7 +146,7 @@ impl FilesystemMT for SeafileFS {
                     .nth(0)
                 {
                     Some(e) => e,
-                    _ => return Err(EPERM),
+                    _ => return Err(ENOENT),
                 };
                 debug!("Found {:?} as match of {:?}", e, path);
                 let (kind, perm, size, mtime) = match e.entry_type.as_str() {
@@ -169,6 +172,109 @@ impl FilesystemMT for SeafileFS {
             frsize: 100u32,
         })
     }
+    
+    fn mkdir(&self, req: RequestInfo, parent: &Path, name: &OsStr, _mode: u32) -> ResultEntry {
+        debug!("mkdir: {:?} in {:?} {:?}", name, parent, parent.parent());
+        if let None = parent.parent() {
+			return Err(EPERM);
+		}
+        let mut libraries = match self.api.get_libraries() {
+            Ok(l) => l,
+            Err(e) => {
+                debug!("ERROR: mkdir({:?} {:?}) {}", parent, name, e);
+                return Err(ENOENT);
+            }
+        };
+        debug!("Seafile libraries: {:?}", libraries);
+        libraries.sort_by(|a, b| a.name.cmp(&b.name));
+        libraries.dedup_by(|a, b| a.name.eq(&b.name));
+
+                let mut components = parent.components().collect::<Vec<_>>();
+                let library_name = components.remove(1);
+                debug!("split: ({:?}, {:?})", library_name, components);
+                let mut relative_path = components.into_iter().collect::<PathBuf>();
+                relative_path.push(name);
+                debug!("join: {:?}", relative_path);
+                let library = match libraries
+                    .into_iter()
+                    .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
+                    .nth(0)
+                {
+                    Some(e) => e,
+                    _ => {
+                        debug!("ERROR: no library {:?}", library_name);
+                        return Err(ENOENT);
+                    }
+                };
+                let result = match self.api.create_new_directory(&library.id, relative_path.as_path()) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        debug!("ERROR: mkdir({:?} {:?}) {}", parent, name, e);
+                        return Err(ENOENT);
+                    }
+				};
+                
+                debug!("TODO create {:?} in {:?}: {:?}", relative_path, library_name, result);
+                
+                if result == "\"success\"" {
+					return Ok((TTL, SeafileFS::fileattr(req, FileType::Directory, 0o755, 0, 0)));
+				}
+
+        Err(ENOSYS)
+	}
+	fn rmdir(&self, _req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
+        debug!("rmdir: {:?} in {:?} {:?}", name, parent, parent.parent());
+
+        if let None = parent.parent() {
+			return Err(EPERM);
+		}
+        let mut libraries = match self.api.get_libraries() {
+            Ok(l) => l,
+            Err(e) => {
+                debug!("ERROR: mkdir({:?} {:?}) {}", parent, name, e);
+                return Err(ENOENT);
+            }
+        };
+        debug!("Seafile libraries: {:?}", libraries);
+        libraries.sort_by(|a, b| a.name.cmp(&b.name));
+        libraries.dedup_by(|a, b| a.name.eq(&b.name));
+
+                let mut components = parent.components().collect::<Vec<_>>();
+                let library_name = components.remove(1);
+                debug!("split: ({:?}, {:?})", library_name, components);
+                let mut relative_path = components.into_iter().collect::<PathBuf>();
+                relative_path.push(name);
+                debug!("join: {:?}", relative_path);
+
+                let library = match libraries
+                    .into_iter()
+                    .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
+                    .nth(0)
+                {
+                    Some(e) => e,
+                    _ => {
+                        debug!("ERROR: no library {:?}", library_name);
+                        return Err(ENOENT);
+                    }
+                };
+                return Err(NOSYS);
+                // DO NOT PROCEED WITH THIS -- NEED TO TEST WHETHER EMPTY FIRST - SEAFILE WILL *WIPE* CONTENTS
+                let result = match self.api.delete_directory(&library.id, relative_path.as_path()) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        debug!("ERROR: rmdir({:?} {:?}) {}", parent, name, e);
+                        return Err(ENOENT);
+                    }
+				};
+                
+                debug!("TODO remove {:?} from {:?}: {:?}", relative_path, library_name, result);
+                
+                if result == "\"success\"" {
+					return Ok(());
+				}
+
+		Err(ENOSYS)
+	}
 
     fn opendir(&self, _req: RequestInfo, path: &Path, _flags: u32) -> ResultOpen {
         debug!("opendir: {:?} (flags = {:#o})", path, _flags);
@@ -188,7 +294,7 @@ impl FilesystemMT for SeafileFS {
                 return Err(ENOENT);
             }
         };
-        debug!("Seafile libraries: {:#?}", libraries);
+        debug!("Seafile libraries: {:?}", libraries);
         libraries.sort_by(|a, b| a.name.cmp(&b.name));
         libraries.dedup_by(|a, b| a.name.eq(&b.name));
 
@@ -266,7 +372,7 @@ impl FilesystemMT for SeafileFS {
         };
         libraries.sort_by(|a, b| a.name.cmp(&b.name));
         libraries.dedup_by(|a, b| a.name.eq(&b.name));
-        debug!("Seafile libraries: {:#?}", libraries);
+        debug!("Seafile libraries: {:?}", libraries);
         let library_name = components.remove(1);
         debug!(
             "split: ({:?} | {:?})",

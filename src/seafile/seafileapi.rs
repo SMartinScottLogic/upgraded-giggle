@@ -1,5 +1,6 @@
 // These require the `serde` dependency.
 use serde::{Deserialize, Serialize};
+use libc::{ENOENT, EPERM, ENOSYS};
 use std::path::Path;
 use std::sync::Mutex;
 use bytes::Bytes;
@@ -134,6 +135,47 @@ impl SeafileAPI {
         let body: Vec<LibraryEntry> = res.json()?;
         Ok(body)
     }
+    
+    pub fn create_new_directory(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+        debug!("self: {:?}", &self);
+        let authorization = self.login()?;
+        debug!("self: {:?}", &self);
+        let url = format!("{}/api2/repos/{}/dir/", self.server, id);
+
+        debug!("url: {}, p: {:?}, {:?}", url, path, [("p", path)]);
+
+        let res = self
+            .client
+            .post(&url)
+            .body("operation=mkdir")
+            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            //.query(&[("t","f"),("p","/")])
+            .query(&[("p", path)])
+            .header("Authorization", &authorization)
+            .send()?;
+
+        let body: String = res.text()?;
+        Ok(body)
+	}
+	
+	pub fn delete_directory(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+        debug!("self: {:?}", &self);
+        let authorization = self.login()?;
+        debug!("self: {:?}", &self);
+        let url = format!("{}/api2/repos/{}/dir/", self.server, id);
+
+        debug!("url: {}, p: {:?}, {:?}", url, path, [("p", path)]);
+
+        let res = self
+            .client
+            .delete(&url)
+            .query(&[("p", path)])
+            .header("Authorization", &authorization)
+            .send()?;
+
+        let body: String = res.text()?;
+        Ok(body)
+	}
     
     pub fn get_download_link(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
         debug!("self: {:?}", &self);
