@@ -1,9 +1,6 @@
 use std::ffi::{OsStr, OsString};
 use std::{env, io};
 
-mod seafile;
-
-#[macro_use]
 extern crate log;
 
 fn main() -> io::Result<()> {
@@ -18,8 +15,8 @@ fn main() -> io::Result<()> {
     let (server, username, password, mountpoint) = (&args[1], &args[2], &args[3], &args[4]);
 
     let filesystem =
-        seafile::SeafileFS::new(server, username, password);
-    let options = ["-o", "rw", "-o", &"fsname=seafile", "-a", "auto_mount"];
+        upgraded_giggle::SeafileFS::new(server, username, password);
+    let options = ["-o", "rw", "-o", "fsname=seafile", "-a", "auto_mount"];
     let options = options.iter().map(|o| o.as_ref()).collect::<Vec<&OsStr>>();
     fuse_mt::mount(fuse_mt::FuseMT::new(filesystem, 1), &mountpoint, &options)
 }

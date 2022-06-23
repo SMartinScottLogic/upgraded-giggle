@@ -1,8 +1,8 @@
 [package]
-name = "upgraded-giggle"
+name = "upgraded_giggle"
 version = "0.2.0"
 authors = ["simon"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,7 +16,7 @@ reqwest = { version = "0.10", features = ["blocking","json"] }
 # Types and traits for working with bytes
 bytes = "0.5.6"
 # An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications.
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.8.4", features = ["full"] }
 # An implementation of futures and streams featuring zero allocations, composability, ...
 futures = "0.3.5"
 # A generic serialization/deserialization framework

@@ -1,13 +1,15 @@
+use log::debug;
 // These require the `serde` dependency.
 use serde::{Deserialize, Serialize};
-use libc::{ENOENT, EPERM, ENOSYS};
 use std::path::Path;
 use std::sync::Mutex;
 use bytes::Bytes;
 
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 #[derive(Debug, Serialize, Deserialize)]
-struct AuthResponse {
-    token: String,
+pub struct AuthResponse {
+    pub token: String,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -49,6 +51,7 @@ pub struct SeafileAPI {
     username: String,
     password: String,
 }
+
 impl SeafileAPI {
     pub fn new(server: &str, username: &str, password: &str) -> Self {
         Self {
@@ -61,7 +64,7 @@ impl SeafileAPI {
         }
     }
 
-    fn login(&self) -> Result<String, Box<dyn std::error::Error>> {
+    fn login(&self) -> Result<String> {
         {
             let auth = self.authorization.lock().unwrap();
             if let Some(a) = &*auth {
@@ -87,7 +90,7 @@ impl SeafileAPI {
         Ok(authorization)
     }
 
-    pub fn get_libraries(&self) -> Result<Vec<Library>, Box<dyn std::error::Error>> {
+    pub fn get_libraries(&self) -> Result<Vec<Library>> {
         {
             let libraries = self.libraries.lock().unwrap();
             if let Some(l) = &*libraries {
@@ -116,7 +119,7 @@ impl SeafileAPI {
         &self,
         id: &str,
         path: &Path,
-    ) -> Result<Vec<LibraryEntry>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<LibraryEntry>> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -136,7 +139,29 @@ impl SeafileAPI {
         Ok(body)
     }
     
-    pub fn create_new_directory(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn create_file(&self, id: &str, path: &Path) -> Result<String> {
+        debug!("self: {:?}", &self);
+        let authorization = self.login()?;
+        debug!("self: {:?}", &self);
+        let url = format!("{}/api2/repos/{}/file/", self.server, id);
+
+        debug!("url: {}, p: {:?}, {:?}", url, path, [("p", path)]);
+
+        let res = self
+            .client
+            .post(&url)
+            .body("operation=create")
+            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            //.query(&[("t","f"),("p","/")])
+            .query(&[("p", path)])
+            .header("Authorization", &authorization)
+            .send()?;
+
+        let body: String = res.text()?;
+        Ok(body)
+	}
+    
+    pub fn create_new_directory(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -158,7 +183,7 @@ impl SeafileAPI {
         Ok(body)
 	}
 	
-	pub fn delete_directory(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+	pub fn delete_directory(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -177,7 +202,7 @@ impl SeafileAPI {
         Ok(body)
 	}
     
-    pub fn get_download_link(&self, id: &str, path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn get_download_link(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -198,7 +223,7 @@ impl SeafileAPI {
         Ok(body)
 	}
 	
-	pub fn download(&self, uri: &str) -> Result<Bytes, Box<dyn std::error::Error>> {
+	pub fn download(&self, uri: &str) -> Result<Bytes> {
 		let res = self.client.get(uri).send()?;
 		let body = res.bytes()?;
 		Ok(body)

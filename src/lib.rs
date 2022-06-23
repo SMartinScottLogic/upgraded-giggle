@@ -1,14 +1,16 @@
 use fuse_mt::{
     CallbackResult, DirectoryEntry, FileAttr, FileType, FilesystemMT, RequestInfo, ResultEmpty,
-    ResultEntry, ResultOpen, ResultReaddir, ResultSlice, ResultStatfs, Statfs,
+    ResultEntry, ResultOpen, ResultReaddir, ResultSlice, ResultStatfs, ResultCreate, ResultWrite, Statfs,
 };
 use libc::{ENOENT, EPERM, ENOSYS};
+use libc::{S_IFMT, S_IFREG, S_IRWXU, S_IRUSR, S_IWUSR, S_IRWXG, S_IRGRP, S_IRWXO, S_IROTH};
+use log::{info, debug, trace};
 use std::ffi::{OsString, OsStr};
 use std::path::{Path, PathBuf};
 use time::Timespec;
 use bytes::Bytes;
 
-mod seafileapi;
+pub mod seafileapi;
 
 const TTL: Timespec = Timespec { sec: 1, nsec: 0 };
 
@@ -83,8 +85,7 @@ impl FilesystemMT for SeafileFS {
                 libraries.dedup_by(|a, b| a.name.eq(&b.name));
                 let entry = match libraries
                     .into_iter()
-                    .filter(|entry| entry.name.eq(&components[1].as_os_str().to_string_lossy()))
-                    .nth(0)
+                    .find(|entry| entry.name.eq(&components[1].as_os_str().to_string_lossy()))
                 {
                     Some(e) => e,
                     _ => {
@@ -123,8 +124,7 @@ impl FilesystemMT for SeafileFS {
                 debug!("join: {:?}", relative_path);
                 let entry = match libraries
                     .into_iter()
-                    .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
-                    .nth(0)
+                    .find(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
                 {
                     Some(e) => e,
                     _ => seafileapi::Library::default(),
@@ -142,16 +142,15 @@ impl FilesystemMT for SeafileFS {
                 );
                 let e = match entries
                     .into_iter()
-                    .filter(|entry| entry.name.eq(&file_name.as_os_str().to_string_lossy()))
-                    .nth(0)
+                    .find(|entry| entry.name.eq(&file_name.as_os_str().to_string_lossy()))
                 {
                     Some(e) => e,
                     _ => return Err(ENOENT),
                 };
                 debug!("Found {:?} as match of {:?}", e, path);
                 let (kind, perm, size, mtime) = match e.entry_type.as_str() {
-                    "dir" => (FileType::Directory, 0o755 as u16, e.size, e.mtime),
-                    _ => (FileType::RegularFile, 0o644 as u16, e.size, e.mtime),
+                    "dir" => (FileType::Directory, 0o755_u16, e.size, e.mtime),
+                    _ => (FileType::RegularFile, 0o644_u16, e.size, e.mtime),
                 };
                 Ok((TTL, SeafileFS::fileattr(req, kind, perm, size, mtime)))
             }
@@ -175,7 +174,7 @@ impl FilesystemMT for SeafileFS {
     
     fn mkdir(&self, req: RequestInfo, parent: &Path, name: &OsStr, _mode: u32) -> ResultEntry {
         debug!("mkdir: {:?} in {:?} {:?}", name, parent, parent.parent());
-        if let None = parent.parent() {
+        if parent.parent().is_none() {
 			return Err(EPERM);
 		}
         let mut libraries = match self.api.get_libraries() {
@@ -197,8 +196,7 @@ impl FilesystemMT for SeafileFS {
                 debug!("join: {:?}", relative_path);
                 let library = match libraries
                     .into_iter()
-                    .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
-                    .nth(0)
+                    .find(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
                 {
                     Some(e) => e,
                     _ => {
@@ -225,7 +223,7 @@ impl FilesystemMT for SeafileFS {
 	fn rmdir(&self, _req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
         debug!("rmdir: {:?} in {:?} {:?}", name, parent, parent.parent());
 
-        if let None = parent.parent() {
+        if parent.parent().is_none() {
 			return Err(EPERM);
 		}
         let mut libraries = match self.api.get_libraries() {
@@ -246,10 +244,9 @@ impl FilesystemMT for SeafileFS {
                 relative_path.push(name);
                 debug!("join: {:?}", relative_path);
 
-                let library = match libraries
+                let _library = match libraries
                     .into_iter()
-                    .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
-                    .nth(0)
+                    .find(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
                 {
                     Some(e) => e,
                     _ => {
@@ -257,8 +254,9 @@ impl FilesystemMT for SeafileFS {
                         return Err(ENOENT);
                     }
                 };
-                return Err(NOSYS);
+                Err(ENOSYS)
                 // DO NOT PROCEED WITH THIS -- NEED TO TEST WHETHER EMPTY FIRST - SEAFILE WILL *WIPE* CONTENTS
+                /*
                 let result = match self.api.delete_directory(&library.id, relative_path.as_path()) {
                     Ok(e) => e,
                     Err(e) => {
@@ -274,6 +272,7 @@ impl FilesystemMT for SeafileFS {
 				}
 
 		Err(ENOSYS)
+		*/
 	}
 
     fn opendir(&self, _req: RequestInfo, path: &Path, _flags: u32) -> ResultOpen {
@@ -314,8 +313,7 @@ impl FilesystemMT for SeafileFS {
                 debug!("join: {:?}", relative_path);
                 let library = match libraries
                     .into_iter()
-                    .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
-                    .nth(0)
+                    .find(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
                 {
                     Some(e) => e,
                     _ => {
@@ -349,6 +347,31 @@ impl FilesystemMT for SeafileFS {
 
         Ok(entries)
     }
+    
+    fn truncate(&self, _req: RequestInfo, path: &Path, _fh: Option<u64>, size: u64) -> ResultEmpty {
+        debug!("truncate: {:?} to {:#x}", path, size);
+        Ok(())
+	}
+    
+    fn open(&self, _req: RequestInfo, path: &Path, flags: u32) -> ResultOpen {
+        debug!("open {:?} {:#o}", path, flags);
+        Err(libc::ENOSYS)
+	}
+	
+	fn flush(&self, _req: RequestInfo, path: &Path, fh: u64, _lock_owner: u64) -> ResultEmpty {
+        debug!("flush: {:?} {}", path, fh);
+        Ok(())
+	}
+
+	fn release(&self, _req: RequestInfo, path: &Path, fh: u64, _flags: u32, _lock_owner: u64, _flush: bool) -> ResultEmpty {
+        debug!("release: {:?} {}", path, fh);
+        Ok(())
+    }
+    
+    fn fsync(&self, _req: RequestInfo, path: &Path, fh: u64, _datasync: bool) -> ResultEmpty {
+        debug!("fsync: {:?} {}", path, fh);
+        Ok(())
+	}
 
     fn read(
         &self,
@@ -382,8 +405,7 @@ impl FilesystemMT for SeafileFS {
         debug!("join: {:?}", relative_path);
         let entry = match libraries
             .into_iter()
-            .filter(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
-            .nth(0)
+            .find(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
         {
             Some(e) => e,
             _ => seafileapi::Library::default(),
@@ -419,4 +441,110 @@ impl FilesystemMT for SeafileFS {
         
         callback(Ok(&body))
     }
+    
+    fn write(&self,
+    _req: RequestInfo,
+    path: &Path,
+    _fh: u64,
+    offset: u64,
+    data: Vec<u8>,
+    flags: u32
+    ) -> ResultWrite {
+        debug!("write {:?} {} {} {:#o}", path, offset, data.len(), flags);
+		Ok(data.len() as u32)
+	}
+    
+    fn mknod(
+    &self,
+    req: RequestInfo,
+    parent: &Path,
+    name: &OsStr,
+    mode: u32,
+    rdev: u32
+) -> ResultEntry {
+		debug!("mknod: {:?}/{:?} (mode={:#o}, rdev={})", parent, name, mode, rdev);
+		// Cannot create non-regular file
+		if mode & S_IFMT != S_IFREG {
+			return Err(EPERM);
+		}
+		// Only support creating with permissions of 644
+		if mode & S_IRWXU != S_IRUSR | S_IWUSR {
+			return Err(EPERM);
+		}
+		if mode & S_IRWXG != S_IRGRP {
+			return Err(EPERM);
+		}
+		if mode & S_IRWXO != S_IROTH {
+			return Err(EPERM);
+		}
+		// Can only create within a library
+        if parent.parent().is_none() {
+			return Err(EPERM);
+		}
+		
+        let mut libraries = match self.api.get_libraries() {
+            Ok(l) => l,
+            Err(e) => {
+                debug!("ERROR: mkdir({:?} {:?}) {}", parent, name, e);
+                return Err(ENOENT);
+            }
+        };
+        debug!("Seafile libraries: {:?}", libraries);
+        libraries.sort_by(|a, b| a.name.cmp(&b.name));
+        libraries.dedup_by(|a, b| a.name.eq(&b.name));
+
+                let mut components = parent.components().collect::<Vec<_>>();
+                let library_name = components.remove(1);
+                debug!("split: ({:?}, {:?})", library_name, components);
+                let mut relative_path = components.into_iter().collect::<PathBuf>();
+                relative_path.push(name);
+                debug!("join: {:?}", relative_path);
+
+                let library = match libraries
+                    .into_iter()
+                    .find(|entry| entry.name.eq(&library_name.as_os_str().to_string_lossy()))
+                {
+                    Some(e) => e,
+                    _ => {
+                        debug!("ERROR: no library {:?}", library_name);
+                        return Err(ENOENT);
+                    }
+                };
+                let result = match self.api.create_file(&library.id, relative_path.as_path()) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        debug!("ERROR: mknod({:?} {:?}) {}", parent, name, e);
+                        return Err(ENOENT);
+                    }
+				};
+                
+                debug!("TODO create {:?} in {:?}: {:?}", relative_path, library_name, result);
+                
+                if result == "\"success\"" {
+					return Ok((TTL, SeafileFS::fileattr(req, FileType::RegularFile, 0o644, 0, 0)));
+				}
+		Err(EPERM)
+	}
+    
+    fn create(
+    &self,
+    _req: RequestInfo,
+    parent: &Path,
+    name: &OsStr,
+    mode: u32,
+    flags: u32
+    ) -> ResultCreate {
+		debug!("create {:?} {:?} {:?} {:?}", parent, name, mode, flags);
+		Err(ENOSYS)
+	}
+	
+	fn unlink(
+    &self,
+    _req: RequestInfo,
+    parent: &Path,
+    name: &OsStr
+) -> ResultEmpty {
+		debug!("unlink {:?} {:?}", parent, name);
+		Err(ENOSYS)
+	}
 }
