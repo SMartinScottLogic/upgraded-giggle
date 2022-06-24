@@ -12,24 +12,24 @@ fuse_mt = "0.5.1"
 # Raw FFI bindings to platform libraries like libc.
 libc = "0.2.54"
 # higher level HTTP client library
-reqwest = { version = "0.10", features = ["blocking","json"] }
+reqwest = { version = "0.11", features = ["blocking","json"] }
 # Types and traits for working with bytes
-bytes = "0.5.6"
+bytes = "1.1.0"
 # An event-driven, non-blocking I/O platform for writing asynchronous I/O backed applications.
 tokio = { version = "1.8.4", features = ["full"] }
 # An implementation of futures and streams featuring zero allocations, composability, ...
-futures = "0.3.5"
+futures = "0.3.21"
 # A generic serialization/deserialization framework
 serde = { version = "1.0", features = ["derive"] }
 # A JSON serialization file format
-serde_json = "1.0.55"
+serde_json = "1.0"
 
 # A lightweight logging facade for Rust
 log = "0.4.8"
 # Date and time library for Rust
 chrono = "0.4.9"
 # Utilities for working with time-related functions in Rust.
-time = "0.1.42"
+time = "0.1.43"
 # A highly configurable multi-output logging implementation for the `log` facade
 log4rs = "1.0.0-alpha-2"
 
