@@ -1,9 +1,9 @@
 use log::debug;
 // These require the `serde` dependency.
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Mutex;
-use bytes::Bytes;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -73,7 +73,7 @@ impl SeafileAPI {
         }
         let params = [("username", &self.username), ("password", &self.password)];
         let url = format!("{}/api2/auth-token/", self.server);
-        let res = self.client.post(&url).form(&params).send()?;
+        let res = self.client.post(url).form(&params).send()?;
         let body: AuthResponse = res.json()?;
 
         println!("Body:\n\n{:#?}", body);
@@ -103,7 +103,7 @@ impl SeafileAPI {
         let url = format!("{}/api2/repos/", self.server);
         let res = self
             .client
-            .get(&url)
+            .get(url)
             .header("Authorization", &authorization)
             .send()?;
         debug!("response headers: {:?}", res.headers());
@@ -115,11 +115,7 @@ impl SeafileAPI {
         Ok(body)
     }
 
-    pub fn get_library_content(
-        &self,
-        id: &str,
-        path: &Path,
-    ) -> Result<Vec<LibraryEntry>> {
+    pub fn get_library_content(&self, id: &str, path: &Path) -> Result<Vec<LibraryEntry>> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -138,7 +134,7 @@ impl SeafileAPI {
         let body: Vec<LibraryEntry> = res.json()?;
         Ok(body)
     }
-    
+
     pub fn create_file(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
@@ -151,7 +147,10 @@ impl SeafileAPI {
             .client
             .post(&url)
             .body("operation=create")
-            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
             //.query(&[("t","f"),("p","/")])
             .query(&[("p", path)])
             .header("Authorization", &authorization)
@@ -159,8 +158,8 @@ impl SeafileAPI {
 
         let body: String = res.text()?;
         Ok(body)
-	}
-    
+    }
+
     pub fn create_new_directory(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
@@ -173,7 +172,10 @@ impl SeafileAPI {
             .client
             .post(&url)
             .body("operation=mkdir")
-            .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .header(
+                reqwest::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            )
             //.query(&[("t","f"),("p","/")])
             .query(&[("p", path)])
             .header("Authorization", &authorization)
@@ -181,9 +183,9 @@ impl SeafileAPI {
 
         let body: String = res.text()?;
         Ok(body)
-	}
-	
-	pub fn delete_directory(&self, id: &str, path: &Path) -> Result<String> {
+    }
+
+    pub fn delete_directory(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
         debug!("self: {:?}", &self);
@@ -200,8 +202,8 @@ impl SeafileAPI {
 
         let body: String = res.text()?;
         Ok(body)
-	}
-    
+    }
+
     pub fn get_download_link(&self, id: &str, path: &Path) -> Result<String> {
         debug!("self: {:?}", &self);
         let authorization = self.login()?;
@@ -221,13 +223,13 @@ impl SeafileAPI {
 
         let body: String = res.json()?;
         Ok(body)
-	}
-	
-	pub fn download(&self, uri: &str) -> Result<Bytes> {
-		let res = self.client.get(uri).send()?;
-		let body = res.bytes()?;
-		Ok(body)
-	}
+    }
+
+    pub fn download(&self, uri: &str) -> Result<Bytes> {
+        let res = self.client.get(uri).send()?;
+        let body = res.bytes()?;
+        Ok(body)
+    }
 }
 
 /*

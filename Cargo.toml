@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 # A higher-level FUSE filesystem library with multi-threading and inode->path translation.
-fuse_mt = "0.5.1"
+fuse_mt = "0.6"
 # Raw FFI bindings to platform libraries like libc.
 libc = "0.2.54"
 # higher level HTTP client library
@@ -28,8 +28,6 @@ serde_json = "1.0"
 log = "0.4.8"
 # Date and time library for Rust
 chrono = "0.4.9"
-# Utilities for working with time-related functions in Rust.
-time = "0.1.43"
 # A highly configurable multi-output logging implementation for the `log` facade
 log4rs = "1.0.0-alpha-2"
 
